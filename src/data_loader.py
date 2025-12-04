@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from copy import deepcopy
+from sklearn.impute import SimpleImputer
 
 def load_seer_cutract_dataset(name="seer", seed=42):
     import sklearn
@@ -260,63 +261,142 @@ def load_adult_data(split_size=0.3):
     return X_train, X_test, y_train, y_test, X, y
 
 
-
 def load_covid_dataset(seed=42, drop_SG_UF_NOT=True):
 
+
+    # Read your covid.csv
     df_ALL = pd.read_csv("../data/covid.csv")
-    x_ids = [2,3,5, 6, 7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33]
-    df = df_ALL.iloc[:,x_ids]
-    y = df_ALL.iloc[:,0]
 
+    # Target is the 'death' column
+    y = df_ALL["death"].astype(int)
+
+    # Start from all feature columns (drop the label)
+    df = df_ALL.drop(columns=["death"]).copy()
+
+    # Race dummy columns in your file
+    race_cols = ["Branca", "Preta", "Amarela", "Parda", "Indigena"]
+
+    # Create a single 'Race' categorical column from the one-hot columns
+    df["Race"] = df[race_cols].idxmax(axis=1)
+
+    # Create a synthetic 'SG_UF_NOT' column so the notebook can split
+    # north vs south. We just assign half the rows to 'SP' and half to 'AM'
+    # in a reproducible way using the given seed.
+    rng = np.random.default_rng(seed)
+    mask = rng.random(df.shape[0]) < 0.5
+    df["SG_UF_NOT"] = np.where(mask, "SP", "AM")
+
+    # Match the original API: optionally drop SG_UF_NOT, always drop Race
     if drop_SG_UF_NOT:
-        df= df.drop(columns=['Race', 'SG_UF_NOT'])
+        df = df.drop(columns=["Race", "SG_UF_NOT"])
     else:
-        df= df.drop(columns=['Race'])
+        df = df.drop(columns=["Race"])
 
-    df['y'] = y 
-    df.columns
+    # Attach label as 'y'
+    df["y"] = y
 
-    races = ['Branca', 'Preta', 'Amarela', 'Parda', 'Indigena']
-    regions = []
-    for i in range(df.shape[0]):
-        if df.iloc[i][races[0]]==1:
-            regions.append(1)
-        if df.iloc[i][races[1]]==1:
-            regions.append(2)
-        if df.iloc[i][races[2]]==1:
-            regions.append(3)
-        if df.iloc[i][races[3]]==1:
-            regions.append(4)
-        if df.iloc[i][races[4]]==1:
-            regions.append(5)
-
-    df['region']=regions
-
-
-    ages = ['Age_40', 'Age_40_50', 'Age_50_60', 'Age_60_70','Age_70']
-    regions = []
-    for i in range(df.shape[0]):
-        if df.iloc[i][ages[0]]==1:
-            regions.append(1)
-        if df.iloc[i][ages[1]]==1:
-            regions.append(2)
-        if df.iloc[i][ages[2]]==1:
-            regions.append(3)
-        if df.iloc[i][ages[3]]==1:
-            regions.append(4)
-        if df.iloc[i][ages[4]]==1:
-            regions.append(5)
-
-    df['age_group']=regions
-
-    df= df.drop(columns=races)
-    df= df.drop(columns=ages)
-    
-    return df.drop(columns=['y']), df['y'], df
+    # Return (X, y, df) as in the original function
+    return df.drop(columns=["y"]), df["y"], df
 
 
 
-def load_drug_dataset():
+# def load_drug_dataset():
+#     from sklearn.impute import SimpleImputer
+#     data = pd.read_csv('../data/Drug_Consumption.csv')
+
+#     #Drop overclaimers, Semer, and other nondrug columns
+#     data = data.drop(data[data['Semer'] != 'CL0'].index)
+#     data = data.drop(['Semer', 'Caff', 'Choc'], axis=1)
+#     data.reset_index()
+
+#     # Binary encode gender
+#     data['Gender'] = data['Gender'].apply(lambda x: 1 if x == 'M' else 0)
+
+#     # Encode ordinal features
+#      # Encode ordinal features
+#     ordinal_features = [
+#         'Age',
+#         'Education',
+#         'Alcohol',
+#         'Amyl',
+#         'Amphet',
+#         'Benzos',
+#         'Cannabis',
+#         'Coke',
+#         'Crack',
+#         'Ecstasy',
+#         'Heroin',
+#         'Ketamine',
+#         'Legalh',
+#         'LSD',
+#         'Meth',
+#         'Mushrooms',
+#         'Nicotine',
+#         'VSA',
+#     ]
+
+#     # Build ordinal orderings dynamically from the actual data
+#     # This works for both "18-24" style labels and "Ag1"/"Ag2"/"Ag3" style labels.
+#     ordinal_orderings = []
+#     for col in ordinal_features:
+#         # Get unique values, sort them, and use that as the ordering
+#         vals = sorted(data[col].unique())
+#         ordinal_orderings.append(list(vals))
+
+#     # Ordinal encoding
+#     def ordinal_encoder(df, columns, ordering):
+#         df = df.copy()
+#         for column, order in zip(columns, ordering):
+#             df[column] = df[column].apply(lambda x: order.index(x))
+#         return df
+
+#     # Nominal features
+#     nominal_features = ['Country', 'Ethnicity']
+
+#     # Convert nominal features to category codes
+#     def cat_converter(df, columns):
+#         df = df.copy()
+#         for column in columns:
+#             df[column] = df[column].astype('category').cat.codes
+#         return df
+
+#     # Apply encodings
+#     data = ordinal_encoder(data, ordinal_features, ordinal_orderings)
+#     data = cat_converter(data, nominal_features)
+
+#     nic_df = data.copy()
+#     nic_df['y'] = nic_df['Nicotine'].apply(lambda x: 1 if x not in [0,1] else 0)
+#     nic_df = nic_df.drop(['ID','Nicotine'], axis=1)
+
+#     return nic_df.drop(columns=['y']), nic_df['y'], nic_df
+
+
+# def load_bank_dataset(seed=0):
+#     import pandas as pd
+
+#     df = pd.read_csv('../data/Base.csv')
+#     for col in ["payment_type", "employment_status", "housing_status", "source", "device_os"]:
+#         df[col] = df[col].astype("category").cat.codes
+
+#     df.rename(columns={'fraud_bool': 'y'}, inplace=True)
+
+#     mask = df['y'] == True
+#     df_fraud = df[mask]
+#     df_no = df[~mask]
+
+#     n_samples = 5000
+#     df = pd.concat(
+#         [
+#             df_fraud.sample(n_samples, random_state=seed),
+#             df_no.sample(n_samples, random_state=seed),
+#         ]
+#     )
+#     from sklearn.utils import shuffle
+#     df = shuffle(df, random_state=seed)
+
+#     return df.drop(columns=['y']), df['y'], df
+
+"""def load_drug_dataset():
     from sklearn.impute import SimpleImputer
     data = pd.read_csv('../data/Drug_Consumption.csv')
 
@@ -402,7 +482,287 @@ def load_drug_dataset():
     nic_df['y'] = nic_df['Nicotine'].apply(lambda x: 1 if x not in [0,1] else 0)
     nic_df = nic_df.drop(['ID','Nicotine'], axis=1)
 
-    return nic_df.drop(columns=['y']), nic_df['y'], nic_df
+    return nic_df.drop(columns=['y']), nic_df['y'], nic_df"""
+
+"""
+def load_drug_dataset(seed: int = 0, csv_path: str = "../data/Drug_Consumption.csv"):
+
+    # Read raw CSV
+    data = pd.read_csv(csv_path)
+
+    # 1. Filter out "over-claimers" and drop unused columns
+    data = data[data["semer"] == "CL0"].copy()
+
+    drop_cols = ["semer", "caff", "choc"]
+    existing_drop = [c for c in drop_cols if c in data.columns]
+    data = data.drop(columns=existing_drop)
+
+    # 2. Convert CL0–CL6 codes to integers
+    cl_cols = [
+        "alcohol",
+        "amphet",
+        "amyl",
+        "benzos",
+        "cannabis",
+        "coke",
+        "crack",
+        "ecstasy",
+        "heroin",
+        "ketamine",
+        "legalh",
+        "lsd",
+        "meth",
+        "mushrooms",
+        "nicotine",
+        "vsa",
+    ]
+    cl_map = {f"CL{i}": i for i in range(7)}
+
+    for col in cl_cols:
+        if col in data.columns:
+            data[col] = data[col].map(cl_map).astype("int8")
+
+    # 3. Build binary label from nicotine usage
+    if "nicotine" not in data.columns:
+        raise KeyError("Expected `nicotine` column in Drug_Consumption.csv")
+
+    # CL0/CL1 -> 0, CL2+ -> 1
+    data["y"] = (data["nicotine"] >= 2).astype(int)
+
+    # 4. Drop identifier and nicotine (target feature) from features
+    for col in ["id", "nicotine"]:
+        if col in data.columns:
+            data = data.drop(columns=[col])
+
+    # 5. Rename columns to match the notebook
+    rename_map = {
+        "age": "Age",
+        "gender": "Gender",
+        "education": "Education",
+        "country": "Country",
+        "ethnicity": "Ethnicity",
+        "impulsive": "Impulsive",
+        "ss": "SS",
+        "alcohol": "Alcohol",
+        "amphet": "Amphet",
+        "amyl": "Amyl",
+        "benzos": "Benzos",
+        "cannabis": "Cannabis",
+        "coke": "Coke",
+        "crack": "Crack",
+        "ecstasy": "Ecstasy",
+        "heroin": "Heroin",
+        "ketamine": "Ketamine",
+        "legalh": "Legalh",
+        "lsd": "LSD",
+        "meth": "Meth",
+        "mushrooms": "Mushrooms",
+        "vsa": "VSA",
+    }
+    data = data.rename(columns=rename_map)
+
+    # 6. Split X, y and return
+    X = data.drop(columns=["y"])
+    y = data["y"]
+
+    return X, y, data
+    """
+import pandas as pd
+
+def load_drug_dataset(
+    seed: int = 0,
+    csv_path: str = "../data/Drug_Consumption.csv",
+):
+    """
+    Load and preprocess the Drug_Consumption dataset.
+
+    This version is a cleaned-up, more robust version of the original function,
+    written in the same style as your newer implementation.
+
+    Steps
+    -----
+    1. Load the CSV.
+    2. Remove "over-claimers" (semer != CL0) and drop unused columns.
+    3. Convert CL0–CL6 usage codes to integers 0–6 for selected drug columns.
+    4. Build a binary label `y` from nicotine usage:
+         - 0 = CL0/CL1 (non/very light user)
+         - 1 = CL2–CL6 (medium/heavy user)
+    5. Drop identifier and nicotine columns from the feature matrix.
+    6. Optionally rename columns to match notebook conventions (TitleCase).
+
+    Returns
+    -------
+    X : pandas.DataFrame
+        Feature matrix (no label column).
+    y : pandas.Series
+        Binary label: 1 = medium/heavy nicotine user, 0 = non/very light user.
+    data : pandas.DataFrame
+        Same as X but with the label column `y` included.
+    """
+    # 0. Load raw CSV
+    data = pd.read_csv(csv_path)
+
+    # Ensure we're working with lowercase column names internally
+    # (this matches the Kaggle Drug Consumption dataset style)
+    data.columns = [c.lower() for c in data.columns]
+
+    # 1. Filter out "over-claimers" and drop unused columns
+    if "semer" in data.columns:
+        data = data[data["semer"] == "CL0"].copy()
+
+        drop_cols = ["semer", "caff", "choc"]
+        existing_drop = [c for c in drop_cols if c in data.columns]
+        if existing_drop:
+            data = data.drop(columns=existing_drop)
+
+    # 2. Convert CL0–CL6 codes to integers for drug usage columns
+    cl_cols = [
+        "alcohol",
+        "amyl",
+        "amphet",
+        "benzos",
+        "cannabis",
+        "coke",
+        "crack",
+        "ecstasy",
+        "heroin",
+        "ketamine",
+        "legalh",
+        "lsd",
+        "meth",
+        "mushrooms",
+        "nicotine",
+        "vsa",
+    ]
+    cl_map = {f"CL{i}": i for i in range(7)}
+
+    for col in cl_cols:
+        if col in data.columns:
+            data[col] = data[col].map(cl_map).astype("int8")
+
+    # 3. Build binary label from nicotine usage
+    if "nicotine" not in data.columns:
+        raise KeyError("Expected `nicotine` column in Drug_Consumption.csv after loading")
+
+    # CL0/CL1 -> 0, CL2+ -> 1
+    data["y"] = (data["nicotine"] >= 2).astype(int)
+
+    # 4. Drop identifier and nicotine (target feature) from X
+    for col in ["id", "nicotine"]:
+        if col in data.columns:
+            data = data.drop(columns=[col])
+
+    # 5. Rename columns to match the notebook (TitleCase etc.)
+    rename_map = {
+        "age": "Age",
+        "gender": "Gender",
+        "education": "Education",
+        "country": "Country",
+        "ethnicity": "Ethnicity",
+        "impulsive": "Impulsive",
+        "ss": "SS",
+        "alcohol": "Alcohol",
+        "amphet": "Amphet",
+        "amyl": "Amyl",
+        "benzos": "Benzos",
+        "cannabis": "Cannabis",
+        "coke": "Coke",
+        "crack": "Crack",
+        "ecstasy": "Ecstasy",
+        "heroin": "Heroin",
+        "ketamine": "Ketamine",
+        "legalh": "Legalh",
+        "lsd": "LSD",
+        "meth": "Meth",
+        "mushrooms": "Mushrooms",
+        "vsa": "VSA",
+    }
+    # Only rename columns that actually exist
+    active_rename_map = {k: v for k, v in rename_map.items() if k in data.columns}
+    if active_rename_map:
+        data = data.rename(columns=active_rename_map)
+
+    # 6. Split X, y and return
+    X = data.drop(columns=["y"])
+    y = data["y"]
+
+    return X, y, data
+
+
+def load_support_dataset(seed=42):
+    """
+    Load and preprocess the SUPPORT dataset.
+
+    - Finds support_data.csv in a few reasonable locations.
+    - Encodes income -> salary (0..3).
+    - Encodes race -> 0..3 for {white, black, asian, hispanic}.
+    - Encodes sex: male=1, female=0.
+    - Drops non-numeric text columns not needed for modelling.
+    - Imputes missing numeric values with median (SimpleImputer).
+    - Returns: X, y, Data ; where Data = X with 'y' column appended.
+    """
+    import os
+    from sklearn.impute import SimpleImputer
+
+    # 1) Robust path handling
+    candidates = [
+        "../data/support_data.csv",   # original expected location
+        "data/support_data.csv",      # common alternative
+        "support_data.csv",           # same folder as notebook / script
+    ]
+
+    csv_path = None
+    for p in candidates:
+        if os.path.exists(p):
+            csv_path = p
+            break
+
+    if csv_path is None:
+        raise FileNotFoundError(
+            "support_data.csv not found in ../data, data/, or current directory."
+        )
+
+    df = pd.read_csv(csv_path)
+
+    # 2) Encode income -> salary 0..3 (drop unknown income rows)
+    income_order = ["under $11k", "$11-$25k", "$25-$50k", ">$50k"]
+    df = df[df["income"].isin(income_order)].copy()
+    income_map = {v: i for i, v in enumerate(income_order)}
+    df["salary"] = df["income"].map(income_map)
+
+    # 3) Encode race -> 0..3 (drop 'other' / NaN)
+    race_order = ["white", "black", "asian", "hispanic"]
+    df = df[df["race"].isin(race_order)].copy()
+    race_map = {v: i for i, v in enumerate(race_order)}
+    df["race"] = df["race"].map(race_map)
+
+    # 4) Binary-encode sex
+    df["sex"] = df["sex"].map({"male": 1, "female": 0})
+
+    # 5) Drop non-numeric / text columns that would break sklearn
+    drop_cols = ["income", "d.time", "dzgroup", "dzclass", "ca", "dnr", "sfdm2"]
+    for c in drop_cols:
+        if c in df.columns:
+            df.drop(columns=[c], inplace=True)
+
+    # 6) Rename label column
+    df.rename(columns={"death": "y"}, inplace=True)
+
+    # 7) Split into X / y
+    X = df.drop(columns=["y"])
+    y = df["y"].astype(int)
+
+    # 8) Impute missing values with median so sklearn models don’t crash
+    num_cols = X.columns
+    imputer = SimpleImputer(strategy="median")
+    X[num_cols] = imputer.fit_transform(X[num_cols])
+
+    # 9) Rebuild Data = X + y for the notebook’s convenience
+    Data = X.copy()
+    Data["y"] = y
+
+    return X, y, Data
+
 
 
 def load_bank_dataset(seed=0):
@@ -427,21 +787,5 @@ def load_bank_dataset(seed=0):
     )
     from sklearn.utils import shuffle
     df = shuffle(df, random_state=seed)
-
-    return df.drop(columns=['y']), df['y'], df
-
-
-def load_support_dataset():
-
-    df = pd.read_csv('../data/support_data.csv')
-
-    df['salary'] = df[['under $11k', '$11-$25k', '$25-$50k', '>$50k']].values.argmax(1)+1
-
-    df['race'] =df[[ 'white','black', 'asian', 'hispanic']].values.argmax(1)+1
-
-    df.drop(['under $11k', '$11-$25k', '$25-$50k', '>$50k', 'white','black', 'asian', 'd.time', 'Unnamed: 0', 'hispanic'], axis=1, inplace=True)
-
-    # rename dataframe column
-    df.rename(columns={'death': 'y'}, inplace=True)
 
     return df.drop(columns=['y']), df['y'], df

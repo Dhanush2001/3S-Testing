@@ -38,3 +38,12 @@ def fit_ctgan(data, epochs, learning_rate, embedding_dim, seed, discrete_columns
     syn_model.fit(train_data=data, discrete_columns=discrete_columns)
 
     return syn_model 
+def fit_tabddpm(data, epochs=100, learning_rate=1e-3, embedding_dim=128, seed=42, discrete_columns=None):
+    # import the tabDDPM implementation (replace with real import)
+    from tabddpm_impl import TabDDPMModel  # placeholder
+
+    model = TabDDPMModel(learning_rate=learning_rate, embedding_dim=embedding_dim, ...)
+    adapter = TabDDPMSynthesizerAdapter(model, seed=seed)
+    adapter.set_random_state(seed)
+    adapter.fit(train_data=data, discrete_columns=discrete_columns, epochs=epochs)
+    return adapter
