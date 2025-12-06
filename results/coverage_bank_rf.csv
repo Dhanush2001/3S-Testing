@@ -1,6 +1,6 @@
 ,Value
 test,0.0
-synth,0.0
-synth2,0.5
+synth,1.0
+synth2,1.0
 synth3,1.0
-MBM,0.05
+MBM,0.0
