@@ -39,3 +39,4 @@ ipykernel
 black
 isort
 pre-commit
+synthcity
